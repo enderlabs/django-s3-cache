@@ -114,8 +114,8 @@ class FunctionalTests(TestCase):
         return io_obj
 
     def setUp(self):
-        AWS_ACCESS_KEY_ID = 'AKIAZG6IJX6BBFKQQWZH'
-        AWS_SECRET_ACCESS_KEY = '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'
+        AWS_ACCESS_KEY_ID = 'AKIAZG6IJX6BGOJ7W2UG'
+        AWS_SECRET_ACCESS_KEY = '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'
         AWS_STORAGE_BUCKET_NAME = 'teem-dev-tomas'
         self.cache = AmazonS3Cache(
             None,  # location
