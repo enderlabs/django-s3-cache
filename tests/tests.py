@@ -1,6 +1,7 @@
 # pylint: disable=missing-docstring,protected-access,invalid-name
 
 from io import BytesIO
+import os
 try:
     from unittest.mock import patch
 except ImportError:
@@ -114,17 +115,14 @@ class FunctionalTests(TestCase):
         return io_obj
 
     def setUp(self):
-        AWS_ACCESS_KEY_ID = 'AKIAZG6IJX6BGOJ7W2UG'
-        AWS_SECRET_ACCESS_KEY = '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'
-        AWS_STORAGE_BUCKET_NAME = 'teem-dev-tomas'
         self.cache = AmazonS3Cache(
             None,  # location
             {
                 'BACKEND': 's3cache.AmazonS3Cache',
                 'OPTIONS': {
-                    'access_key': AWS_ACCESS_KEY_ID,
-                    'secret_key': AWS_SECRET_ACCESS_KEY,
-                    'bucket_name': AWS_STORAGE_BUCKET_NAME,
+                    'access_key': os.getenv("S3CACHE_AWS_ACCESS_KEY_ID", None),
+                    'secret_key': os.getenv("S3CACHE_AWS_SECRET_KEY", None),
+                    'bucket_name': os.getenv("S3CACHE_BUCKET", "teem-dev-tomas"),
                     'LOCATION': 'cache',
                     "region_name": 'us-west-2'
                 }
