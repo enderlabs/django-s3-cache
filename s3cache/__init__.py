@@ -213,8 +213,6 @@ class AmazonS3Cache(BaseCache):
         """
             There seems to be an artificial limit of 1000
         """
-        for my_bucket_object in self._storage.bucket.objects.all():
-            print(my_bucket_object)
         return sum(1 for _ in self._storage.bucket.objects.filter(Prefix=self._location))
     _num_entries = property(_get_num_entries)
 
