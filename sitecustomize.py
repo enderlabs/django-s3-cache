@@ -19,7 +19,7 @@ global_settings.NOSE_ARGS = [
     '--cover-branches',
     '--cover-package=s3cache',
 ]
-global_settings.MIDDLEWARE_CLASSES = ()
+global_settings.MIDDLEWARE = ()
 global_settings.SECRET_KEY = "not-very-secret"
 
 global_settings.DATABASES = {

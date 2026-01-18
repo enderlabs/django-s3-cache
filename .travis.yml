@@ -5,31 +5,31 @@ addons:
 after_success:
 - coveralls
 before_install:
-- pip install coveralls mock
+- pip install coveralls
 - if [ -z "$_COMMAND" ]; then export _COMMAND=test; fi
-- if [ -z "$_DJANGO" ]; then export _DJANGO=2.1.4; export _DJANGO_STORAGES=1.7.1; export _BOTO=2.49.0; fi
+- if [ -z "$_DJANGO" ]; then export _DJANGO=5.2.10; export _DJANGO_STORAGES=1.14; export _BOTO3=1.26.0; fi
 env:
-- _BOTO=2.49.0 _DJANGO=1.11.17 _DJANGO_STORAGES=1.7.1
-- _BOTO=2.49.0 _DJANGO=2.0.9 _DJANGO_STORAGES=1.7.1
-- _BOTO=2.49.0 _DJANGO=2.1.4 _DJANGO_STORAGES=1.7.1
+- _BOTO3=1.26.0 _DJANGO=5.0.10 _DJANGO_STORAGES=1.14
+- _BOTO3=1.26.0 _DJANGO=5.1.5 _DJANGO_STORAGES=1.14
+- _BOTO3=1.26.0 _DJANGO=5.2.10 _DJANGO_STORAGES=1.14
 install:
 - pip install django-nose
 - pip install pylint
-- if [ -n "$_BOTO" ]; then pip install boto==$_BOTO; fi
 - if [ -n "$_BOTO3" ]; then pip install boto3==$_BOTO3; fi
 - if [ -n "$_DJANGO" ]; then pip install Django==$_DJANGO django-storages==$_DJANGO_STORAGES; fi
 language: python
 matrix:
   include:
   - env: _COMMAND=pylint
-    python: 3.6
+    python: 3.10
 notifications:
   email:
     on_failure: change
     on_success: change
 python:
-- 2.7
-- 3.6
+- "3.10"
+- "3.11"
+- "3.12"
 script:
 - make $_COMMAND
 sudo: false
