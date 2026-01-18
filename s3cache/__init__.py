@@ -7,11 +7,7 @@
 
 import time
 import hashlib
-
-try:
-    import cPickle as pickle
-except ImportError:
-    import pickle
+import pickle
 
 from storages.backends import s3boto3
 from django.core.files.base import ContentFile
@@ -104,7 +100,7 @@ class AmazonS3Cache(BaseCache):
         )
 
     def add(self, key, value, timeout=None, version=None):
-        if self.has_key(key, version=version):
+        if self.__contains__(key, version=version):
             return False
 
         self.set(key, value, timeout, version=version)
@@ -159,7 +155,11 @@ class AmazonS3Cache(BaseCache):
     def _delete(self, fname):
         self._storage.delete(fname)
 
-    def has_key(self, key, version=None):
+    def __contains__(self, key, version=None):
+        """
+        Django 5.0+ uses __contains__ instead of has_key.
+        Returns True if the key is in the cache and has not expired.
+        """
         key = self.make_key(key, version=version)
         self.validate_key(key)
         fname = _key_to_file(key)
@@ -171,6 +171,13 @@ class AmazonS3Cache(BaseCache):
                 fobj.close()
         except (IOError, OSError, EOFError, pickle.PickleError):
             return False
+
+    def has_key(self, key, version=None):
+        """
+        Backward compatibility wrapper for __contains__.
+        Deprecated: Use __contains__ or 'key in cache' syntax instead.
+        """
+        return self.__contains__(key, version=version)
 
     def _is_expired(self, fobj, fname):
         """
@@ -195,7 +202,21 @@ class AmazonS3Cache(BaseCache):
             return
 
         try:
-            keylist = self._storage.bucket.get_all_keys(prefix=self._location)
+            # Use boto3 API for listing objects
+            bucket = self._storage.bucket
+            prefix = self._location + '/' if self._location else ''
+
+            # List objects using boto3 client
+            response = self._storage.connection.meta.client.list_objects_v2(
+                Bucket=bucket.name,
+                Prefix=prefix,
+                MaxKeys=1000
+            )
+
+            if 'Contents' not in response:
+                return
+
+            keylist = [{'Key': obj['Key']} for obj in response['Contents']]
         except (IOError, OSError):
             return
 
@@ -205,7 +226,12 @@ class AmazonS3Cache(BaseCache):
             doomed = [k for (i, k) in enumerate(keylist) if i % frequency == 0]
 
         try:
-            self._storage.bucket.delete_keys(doomed, quiet=True)
+            # Use boto3 API for deleting objects
+            if doomed:
+                self._storage.connection.meta.client.delete_objects(
+                    Bucket=bucket.name,
+                    Delete={'Objects': doomed, 'Quiet': True}
+                )
         except (IOError, OSError):
             pass
 
@@ -213,7 +239,19 @@ class AmazonS3Cache(BaseCache):
         """
             There seems to be an artificial limit of 1000
         """
-        return len(self._storage.bucket.get_all_keys(prefix=self._location))
+        try:
+            bucket = self._storage.bucket
+            prefix = self._location + '/' if self._location else ''
+
+            response = self._storage.connection.meta.client.list_objects_v2(
+                Bucket=bucket.name,
+                Prefix=prefix,
+                MaxKeys=1000
+            )
+
+            return len(response.get('Contents', []))
+        except (IOError, OSError):
+            return 0
     _num_entries = property(_get_num_entries)
 
     def clear(self):

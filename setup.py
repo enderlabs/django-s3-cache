@@ -11,7 +11,7 @@ with open('README.rst') as file:
 
 config = {
     'name' : 'django-s3-cache',
-    'version' : '2.2.6',
+    'version' : '3.0.0',
     'packages' : find_packages(),
     'author' : 'Alexander Todorov',
     'author_email' : 'atodorov@MrSenko.com',
@@ -27,10 +27,18 @@ config = {
         'License :: OSI Approved :: BSD License',
         'Operating System :: OS Independent',
         'Programming Language :: Python',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
         'Framework :: Django',
+        'Framework :: Django :: 5.0',
+        'Framework :: Django :: 5.1',
+        'Framework :: Django :: 5.2',
     ],
+    'python_requires': '>=3.10',
     'zip_safe' : False,
-    'install_requires' : ['boto', 'django-storages>=1.9', 'Django'],
+    'install_requires' : ['boto3>=1.26.0', 'django-storages>=1.14', 'Django>=5.2,<6.0'],
 }
 
 if (len(sys.argv) >= 2) and (sys.argv[1] == '--requires'):

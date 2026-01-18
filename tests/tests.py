@@ -1,10 +1,7 @@
 # pylint: disable=missing-docstring,protected-access,invalid-name
 
 from io import BytesIO
-try:
-    from unittest.mock import patch
-except ImportError:
-    from mock import patch
+from unittest.mock import patch, MagicMock
 import time
 from django.test import TestCase
 
@@ -207,79 +204,135 @@ class FunctionalTests(TestCase):
         cache = AmazonS3Cache(None, {})
         cache._max_entries = 10
         cache._cull_frequency = 3
-        key_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]
-        with patch.object(cache._storage, '_bucket') as _bucket:
-            _bucket.configure_mock(**{
-                'get_all_keys.return_value': key_list
-            })
+        key_list = [
+            {'Key': '1'}, {'Key': '2'}, {'Key': '3'}, {'Key': '4'},
+            {'Key': '5'}, {'Key': '6'}, {'Key': '7'}, {'Key': '8'},
+            {'Key': '9'}, {'Key': '0'}
+        ]
+
+        mock_bucket = MagicMock()
+        mock_bucket.name = 'test-bucket'
+
+        mock_client = MagicMock()
+        mock_client.list_objects_v2.return_value = {'Contents': [{'Key': k['Key']} for k in key_list]}
+
+        with patch.object(cache._storage, 'bucket', mock_bucket), \
+             patch.object(cache._storage, 'connection') as mock_conn:
+            mock_conn.meta.client = mock_client
             cache.clear()
-            self.assertEqual(_bucket.get_all_keys.call_count, 2)
-            self.assertEqual(_bucket.delete_keys.call_count, 1)
+            # clear() calls _cull(0) which lists objects twice (once for count check, once for deletion)
+            self.assertEqual(mock_client.list_objects_v2.call_count, 2)
+            self.assertEqual(mock_client.delete_objects.call_count, 1)
             # all keys were deleted
-            _bucket.delete_keys.assert_called_with(key_list, quiet=True)
+            mock_client.delete_objects.assert_called_once()
+            call_args = mock_client.delete_objects.call_args
+            self.assertEqual(call_args[1]['Bucket'], 'test-bucket')
+            self.assertEqual(len(call_args[1]['Delete']['Objects']), len(key_list))
 
 
     def test_clear_bucket_raises_exception(self):
-        with patch.object(self.cache._storage, '_bucket') as _bucket:
-            _bucket.configure_mock(**{
-                'get_all_keys.return_value': [1, 2, 3],
-                'delete_keys.side_effect': OSError
-            })
+        mock_bucket = MagicMock()
+        mock_bucket.name = 'test-bucket'
+
+        mock_client = MagicMock()
+        mock_client.list_objects_v2.return_value = {'Contents': [{'Key': '1'}, {'Key': '2'}, {'Key': '3'}]}
+        mock_client.delete_objects.side_effect = OSError
+
+        with patch.object(self.cache._storage, 'bucket', mock_bucket), \
+             patch.object(self.cache._storage, 'connection') as mock_conn:
+            mock_conn.meta.client = mock_client
             self.cache.clear()
 
     def test_num_entries(self):
-        with patch.object(self.cache._storage, '_bucket') as _bucket:
-            _bucket.configure_mock(**{
-                'get_all_keys.return_value': [1, 2, 3]
-            })
+        mock_bucket = MagicMock()
+        mock_bucket.name = 'test-bucket'
+
+        mock_client = MagicMock()
+        mock_client.list_objects_v2.return_value = {'Contents': [{'Key': '1'}, {'Key': '2'}, {'Key': '3'}]}
+
+        with patch.object(self.cache._storage, 'bucket', mock_bucket), \
+             patch.object(self.cache._storage, 'connection') as mock_conn:
+            mock_conn.meta.client = mock_client
             self.assertEqual(self.cache._num_entries, 3)
 
     def test_cull_without_max_entries(self):
         cache = AmazonS3Cache(None, {})
         cache._max_entries = 0
-        with patch.object(cache._storage, '_bucket') as _bucket:
+
+        mock_bucket = MagicMock()
+        mock_client = MagicMock()
+
+        with patch.object(cache._storage, 'bucket', mock_bucket), \
+             patch.object(cache._storage, 'connection') as mock_conn:
+            mock_conn.meta.client = mock_client
             cache._cull()
-            self.assertEqual(_bucket.get_all_keys.call_count, 0)
+            self.assertEqual(mock_client.list_objects_v2.call_count, 0)
 
     def test_cull_with_num_entries_less_than_max_entries(self):
-        with patch.object(self.cache._storage, '_bucket') as _bucket:
-            _bucket.configure_mock(**{
-                'get_all_keys.return_value': [1, 2, 3]
-            })
+        mock_bucket = MagicMock()
+        mock_bucket.name = 'test-bucket'
+
+        mock_client = MagicMock()
+        mock_client.list_objects_v2.return_value = {'Contents': [{'Key': '1'}, {'Key': '2'}, {'Key': '3'}]}
+
+        with patch.object(self.cache._storage, 'bucket', mock_bucket), \
+             patch.object(self.cache._storage, 'connection') as mock_conn:
+            mock_conn.meta.client = mock_client
             self.cache._cull()
-            self.assertEqual(_bucket.get_all_keys.call_count, 1)
-            self.assertEqual(_bucket.delete_keys.call_count, 0)
+            self.assertEqual(mock_client.list_objects_v2.call_count, 1)
+            self.assertEqual(mock_client.delete_objects.call_count, 0)
 
     def test_cull_with_num_entries_great_than_max_entries_cull_frequency_0(self):
         cache = AmazonS3Cache(None, {})
         cache._max_entries = 5
         cache._cull_frequency = 0
-        key_list = [1, 2, 3, 5, 6, 7, 8, 9, 0]
-        with patch.object(cache._storage, '_bucket') as _bucket:
-            _bucket.configure_mock(**{
-                'get_all_keys.return_value': key_list
-            })
+        key_list = [
+            {'Key': '1'}, {'Key': '2'}, {'Key': '3'}, {'Key': '5'},
+            {'Key': '6'}, {'Key': '7'}, {'Key': '8'}, {'Key': '9'}, {'Key': '0'}
+        ]
+
+        mock_bucket = MagicMock()
+        mock_bucket.name = 'test-bucket'
+
+        mock_client = MagicMock()
+        mock_client.list_objects_v2.return_value = {'Contents': [{'Key': k['Key']} for k in key_list]}
+
+        with patch.object(cache._storage, 'bucket', mock_bucket), \
+             patch.object(cache._storage, 'connection') as mock_conn:
+            mock_conn.meta.client = mock_client
             cache._cull()
-            self.assertEqual(_bucket.get_all_keys.call_count, 2)
-            self.assertEqual(_bucket.delete_keys.call_count, 1)
+            self.assertEqual(mock_client.list_objects_v2.call_count, 2)
+            self.assertEqual(mock_client.delete_objects.call_count, 1)
             # when cull_frequency == 0 it means to delete all keys
-            _bucket.delete_keys.assert_called_with(key_list, quiet=True)
+            call_args = mock_client.delete_objects.call_args
+            self.assertEqual(len(call_args[1]['Delete']['Objects']), len(key_list))
 
     def test_cull_with_num_entries_great_than_max_entries_cull_frequency_3(self):
         cache = AmazonS3Cache(None, {})
         cache._max_entries = 5
         cache._cull_frequency = 3
-        key_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]
-        delete_list = [1, 4, 7, 0]
-        with patch.object(cache._storage, '_bucket') as _bucket:
-            _bucket.configure_mock(**{
-                'get_all_keys.return_value': key_list
-            })
+        key_list = [
+            {'Key': '1'}, {'Key': '2'}, {'Key': '3'}, {'Key': '4'},
+            {'Key': '5'}, {'Key': '6'}, {'Key': '7'}, {'Key': '8'},
+            {'Key': '9'}, {'Key': '0'}
+        ]
+        delete_list = [{'Key': '1'}, {'Key': '4'}, {'Key': '7'}, {'Key': '0'}]
+
+        mock_bucket = MagicMock()
+        mock_bucket.name = 'test-bucket'
+
+        mock_client = MagicMock()
+        mock_client.list_objects_v2.return_value = {'Contents': [{'Key': k['Key']} for k in key_list]}
+
+        with patch.object(cache._storage, 'bucket', mock_bucket), \
+             patch.object(cache._storage, 'connection') as mock_conn:
+            mock_conn.meta.client = mock_client
             cache._cull()
-            self.assertEqual(_bucket.get_all_keys.call_count, 2)
-            self.assertEqual(_bucket.delete_keys.call_count, 1)
+            self.assertEqual(mock_client.list_objects_v2.call_count, 2)
+            self.assertEqual(mock_client.delete_objects.call_count, 1)
             # when cull_frequency != 0 it means to delete every Nth key
-            _bucket.delete_keys.assert_called_with(delete_list, quiet=True)
+            call_args = mock_client.delete_objects.call_args
+            self.assertEqual(call_args[1]['Delete']['Objects'], delete_list)
 
     def test_cull_bucket_get_all_keys_raises_exception(self):
         class MockAmazonS3Cache(AmazonS3Cache):
@@ -301,12 +354,21 @@ class FunctionalTests(TestCase):
     def test_cull_bucket_delete_keys_raises_exception(self):
         cache = AmazonS3Cache(None, {})
         cache._max_entries = 5
-        key_list = [1, 2, 3, 5, 6, 7, 8, 9, 0]
-        with patch.object(cache._storage, '_bucket') as _bucket:
-            _bucket.configure_mock(**{
-                'get_all_keys.return_value': key_list,
-                'delete_keys.side_effect': OSError
-            })
+        key_list = [
+            {'Key': '1'}, {'Key': '2'}, {'Key': '3'}, {'Key': '5'},
+            {'Key': '6'}, {'Key': '7'}, {'Key': '8'}, {'Key': '9'}, {'Key': '0'}
+        ]
+
+        mock_bucket = MagicMock()
+        mock_bucket.name = 'test-bucket'
+
+        mock_client = MagicMock()
+        mock_client.list_objects_v2.return_value = {'Contents': [{'Key': k['Key']} for k in key_list]}
+        mock_client.delete_objects.side_effect = OSError
+
+        with patch.object(cache._storage, 'bucket', mock_bucket), \
+             patch.object(cache._storage, 'connection') as mock_conn:
+            mock_conn.meta.client = mock_client
             cache._cull()
-            self.assertEqual(_bucket.get_all_keys.call_count, 2)
-            self.assertEqual(_bucket.delete_keys.call_count, 1)
+            self.assertEqual(mock_client.list_objects_v2.call_count, 2)
+            self.assertEqual(mock_client.delete_objects.call_count, 1)
